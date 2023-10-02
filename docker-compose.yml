@@ -1,0 +1,75 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    hostname: api_service
+    container_name: api_service
+    depends_on:
+      - db_postgres
+      - cache_redis
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    networks:
+      - my_net
+
+  db_postgres:
+    image: postgres:alpine
+    container_name: db_postgres
+    hostname: db_postgres
+    restart: on-failure
+    environment:
+      POSTGRES_DB: mydb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - my_net
+
+  cache_redis:
+    image: redis:alpine
+    container_name: cache_redis
+    hostname: cache_redis
+    restart: on-failure
+    ports:
+      - '6379:6379'
+    expose:
+      - '6379'
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/var/lib/redis/data
+    networks:
+      - my_net
+
+  redis_commander:
+    image: rediscommander/redis-commander:latest
+    container_name: cache_redis_commander
+    hostname: cache_redis_commander
+    restart: on-failure
+    depends_on:
+      - cache_redis
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=cache_redis
+      - HTTP_USER=user
+      - HTTP_PASSWORD=password
+    networks:
+      - my_net
+
+volumes:
+  postgres_data:
+    driver: local
+
+  redis_data:
+    driver: local
+
+networks:
+  my_net:

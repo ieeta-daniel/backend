@@ -1,9 +1,10 @@
 from fastapi import FastAPI, status
+from fastapi.responses import RedirectResponse
+
 from app.config import settings
-from app.auth import controller
+from app.v1.api import router as v1_router
 from app.database import create_db_and_tables
 from app.schemas import HealthCheck
-from app.auth import models
 
 app = FastAPI(
     title=settings.title,
@@ -11,13 +12,15 @@ app = FastAPI(
     description=settings.description,
 )
 
-app.include_router(controller.router, prefix="/users", tags=["users"])
-
+app.include_router(v1_router, prefix="/v1", include_in_schema=True)
 
 @app.on_event("startup")
 async def startup():
     await create_db_and_tables()
 
+@app.get('/', response_class=RedirectResponse, include_in_schema=False)
+async def docs():
+    return RedirectResponse(url='/docs')
 
 @app.get(
     "/health",

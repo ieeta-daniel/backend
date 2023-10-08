@@ -8,10 +8,14 @@ services:
     hostname: api_service
     container_name: api_service
     depends_on:
-      - db_postgres
-      - cache_redis
+      db_postgres:
+          condition: service_healthy
+      cache_redis:
+          condition: service_healthy
     ports:
       - "8000:8000"
+    volumes:
+      - .:/app
     env_file:
       - .env
     networks:
@@ -32,6 +36,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - my_net
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U user -d mydb'"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   cache_redis:
     image: redis:alpine
@@ -47,6 +56,11 @@ services:
       - redis_data:/var/lib/redis/data
     networks:
       - my_net
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis_commander:
     image: rediscommander/redis-commander:latest

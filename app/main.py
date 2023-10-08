@@ -1,5 +1,7 @@
 from fastapi import FastAPI, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.v1.api import router as v1_router
@@ -12,15 +14,33 @@ app = FastAPI(
     description=settings.description,
 )
 
+origins = [
+    'localhost',
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/media", StaticFiles(directory="media"), name="media")
+
+
 app.include_router(v1_router, prefix="/v1", include_in_schema=True)
+
 
 @app.on_event("startup")
 async def startup():
     await create_db_and_tables()
 
+
 @app.get('/', response_class=RedirectResponse, include_in_schema=False)
 async def docs():
     return RedirectResponse(url='/docs')
+
 
 @app.get(
     "/health",

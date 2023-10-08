@@ -1,0 +1,8 @@
+falta fazer o refresh com o redis
+validação
+ui changes
+
+
+in accounts, models.py
+using postgres dialect
+so if you want other dialects, you need to change the code in models.py

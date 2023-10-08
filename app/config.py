@@ -13,6 +13,8 @@ class GlobalConfig(BaseConfig):
     redoc_url: str = "/redoc"
     api_prefix: str = "/api"
     debug: bool = os.environ.get("DEBUG")
+    media: str = os.environ.get("MEDIA")
+    avatar_sizes: list = [50, 150, 300, 600, 800]
 
     postgres_user: str = os.environ.get("POSTGRES_USER")
     postgres_password: str = os.environ.get("POSTGRES_PASSWORD")

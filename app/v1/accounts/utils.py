@@ -96,7 +96,7 @@ def set_cookies(response, access_token, refresh_token):
                         secure=True, httponly=True, samesite='Lax')
     response.set_cookie('refresh_token', refresh_token, max_age=settings.refresh_token_expire_minutes * 60, path='/',
                         secure=True, httponly=True, samesite='Lax')
-    response.set_cookie('logged_in', 'True', max_age=settings.access_token_expire_minutes * 60, path='/', secure=True,
+    response.set_cookie('logged_in', 'true', max_age=settings.access_token_expire_minutes * 60, path='/', secure=True,
                         httponly=False, samesite='Lax')
 
 

@@ -44,19 +44,13 @@ def create_refresh_token():
 
 def encrypt_refresh_token(refresh_token):
     cipher_suite = Fernet(settings.jwt_refresh_secret_key)
-    encrypted_refresh_token = cipher_suite.encrypt(refresh_token.encode())
-    return encrypted_refresh_token
-
-
-def create_refresh_token_and_encrypt():
-    refresh_token = create_refresh_token()
-    encrypted_refresh_token = encrypt_refresh_token(refresh_token)
+    encrypted_refresh_token = cipher_suite.encrypt(refresh_token.encode('utf-8'))
     return encrypted_refresh_token
 
 
 def decrypt_refresh_token(encrypted_refresh_token):
     cipher_suite = Fernet(settings.jwt_refresh_secret_key)
-    decrypted_refresh_token = cipher_suite.decrypt(encrypted_refresh_token).decode()
+    decrypted_refresh_token = cipher_suite.decrypt(encrypted_refresh_token).decode('utf-8')
     return decrypted_refresh_token
 
 
@@ -68,6 +62,11 @@ def verify_refresh_token(given_refresh_token, encrypted_refresh_tokens):
     return None
 
 
+def verify_blacklisted_token(given_access_token, blacklisted_access_tokens):
+    for blacklisted_access_token in blacklisted_access_tokens:
+        if given_access_token == blacklisted_access_token.decode('utf-8'):
+            return True
+    return False
 
 
 def decode_access_token(token: str) -> TokenPayload:

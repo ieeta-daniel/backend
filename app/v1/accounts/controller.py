@@ -8,17 +8,17 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 from app.config import settings
 from app.dependencies import get_accounts_service, cache
-from app.v1.accounts.schedulers import clear_expired_refresh_token_scheduler
-from app.v1.accounts.schemas import UserRead, UserCreate, Token, RefreshTokenRequest
+from app.v1.accounts.schedulers import scheduler
+from app.v1.accounts.schemas import UserRead, UserCreate, Token, RefreshTokenRequest, LogoutRequest
 from app.v1.accounts.service import AccountsService
 from app.v1.accounts.utils import set_cookies, create_access_token, create_refresh_token, \
-    unset_cookies, generate_image_resolutions, encrypt_refresh_token, verify_refresh_token
+    unset_cookies, generate_image_resolutions, encrypt_refresh_token, verify_refresh_token, verify_blacklisted_token
 
 router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/accounts/login")
 
-clear_expired_refresh_token_scheduler.start()
+scheduler.start()
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
@@ -26,10 +26,12 @@ async def register(response: Response, background_tasks: BackgroundTasks, user: 
                    redis_client: cache = Depends(cache),
                    accounts_service: AccountsService = Depends(get_accounts_service(AccountsService))):
     existing_user = await accounts_service.get_user_by_username(user.username)
+
     if existing_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered")
 
     existing_email = await accounts_service.get_user_by_email(user.email)
+
     if existing_email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
@@ -79,6 +81,12 @@ async def register(response: Response, background_tasks: BackgroundTasks, user: 
 async def login(response: Response, redis_client: cache = Depends(cache),
                 form_data: OAuth2PasswordRequestForm = Depends(),
                 accounts_service: AccountsService = Depends(get_accounts_service(AccountsService))):
+    if form_data.username is None or form_data.password is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username or password not provided")
+
+    if form_data.grant_type != 'password':
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid grant type")
+
     user = await accounts_service.authenticate_user(form_data.username, form_data.password)
 
     if user is None:
@@ -121,38 +129,91 @@ async def refresh(response: Response, request: RefreshTokenRequest = Depends(), 
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    redis_key = f"refresh_tokens:{user.id}"
-
     current_timestamp = int(time.time())
-    redis_client.zremrangebyscore(redis_key, '-inf', current_timestamp)
 
-    encrypted_refresh_tokens = redis_client.zrange(redis_key, 0, -1)
+    access_token_blacklist_redis_key = f"blacklisted_access_tokens:{user.id}"
 
-    if not encrypted_refresh_tokens:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Refresh token not found")
+    redis_client.zremrangebyscore(access_token_blacklist_redis_key, '-inf', current_timestamp)
+
+    blacklisted_tokens = redis_client.zrange(access_token_blacklist_redis_key, 0, -1)
+
+    if verify_blacklisted_token(token, blacklisted_tokens):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
+
+    refresh_tokens_redis_key = f"refresh_tokens:{user.id}"
+
+    redis_client.zremrangebyscore(refresh_tokens_redis_key, '-inf', current_timestamp)
+
+    encrypted_refresh_tokens = redis_client.zrange(refresh_tokens_redis_key, 0, -1)
 
     encrypted_refresh_token = verify_refresh_token(refresh_token, encrypted_refresh_tokens)
 
     if not encrypted_refresh_token:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid refresh token")
 
-    redis_client.zrem(redis_key, encrypted_refresh_token)
+    redis_client.zrem(refresh_tokens_redis_key, encrypted_refresh_token)
+
+    access_token_expire_timestamp = current_timestamp + (settings.access_token_expire_minutes * 60)
+    redis_client.zadd(access_token_blacklist_redis_key, {token: access_token_expire_timestamp})
 
     new_access_token = create_access_token(user.id)
 
     new_refresh_token = create_refresh_token()
 
     new_encrypted_refresh_token = encrypt_refresh_token(new_refresh_token)
-    expire_timestamp = int(time.time()) + (settings.refresh_token_expire_minutes * 60)
-    redis_client.zadd(redis_key, {new_encrypted_refresh_token: expire_timestamp})
+    refresh_token_expire_timestamp = current_timestamp + (settings.refresh_token_expire_minutes * 60)
+    redis_client.zadd(refresh_tokens_redis_key, {new_encrypted_refresh_token: refresh_token_expire_timestamp})
 
     set_cookies(response, new_access_token, new_refresh_token)
 
     return {'access_token': new_access_token, 'token_type': 'bearer'}
 
 
-@router.get('/logout', status_code=status.HTTP_200_OK)
-def logout(response: Response, token: str = Depends(oauth2_scheme)):
+@router.post('/logout', status_code=status.HTTP_200_OK)
+async def logout(response: Response, request: LogoutRequest = Depends(), token: str = Depends(oauth2_scheme),
+                 redis_client: cache = Depends(cache),
+                 accounts_service: AccountsService = Depends(get_accounts_service(AccountsService))):
+    refresh_token = request.refresh_token
+
+    if refresh_token is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Refresh token not provided")
+
+    user = await accounts_service.get_current_user(token)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    current_timestamp = int(time.time())
+
+    access_token_blacklist_redis_key = f"blacklisted_access_tokens:{user.id}"
+
+    redis_client.zremrangebyscore(access_token_blacklist_redis_key, '-inf', current_timestamp)
+
+    blacklisted_tokens = redis_client.zrange(access_token_blacklist_redis_key, 0, -1)
+
+    if verify_blacklisted_token(token, blacklisted_tokens):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
+
+    refresh_tokens_redis_key = f"refresh_tokens:{user.id}"
+
+    redis_client.zremrangebyscore(refresh_tokens_redis_key, '-inf', current_timestamp)
+
+    encrypted_refresh_tokens = redis_client.zrange(refresh_tokens_redis_key, 0, -1)
+
+    encrypted_refresh_token = verify_refresh_token(refresh_token, encrypted_refresh_tokens)
+
+    if not encrypted_refresh_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid refresh token")
+
+    redis_client.zrem(refresh_tokens_redis_key, encrypted_refresh_token)
+
+    access_token_expire_timestamp = current_timestamp + (settings.access_token_expire_minutes * 60)
+    redis_client.zadd(access_token_blacklist_redis_key, {token: access_token_expire_timestamp})
+
     unset_cookies(response)
     return {'message': 'Logout successful'}
 
@@ -164,22 +225,34 @@ async def read_users(accounts_service: AccountsService = Depends(get_accounts_se
 
 @router.get('/me', response_model=UserRead)
 async def read_me(token: str = Depends(oauth2_scheme),
+                  redis_client: cache = Depends(cache),
                   accounts_service: AccountsService = Depends(get_accounts_service(AccountsService))):
     user = await accounts_service.get_current_user(token)
+
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    current_timestamp = int(time.time())
+
+    access_token_blacklist_redis_key = f"blacklisted_access_tokens:{user.id}"
+
+    redis_client.zremrangebyscore(access_token_blacklist_redis_key, '-inf', current_timestamp)
+
+    blacklisted_tokens = redis_client.zrange(access_token_blacklist_redis_key, 0, -1)
+
+    if verify_blacklisted_token(token, blacklisted_tokens):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
+
     return user
 
 
 @router.get("/{username}/", response_model=UserRead)
 async def read_user(
-        username: str,
-        accounts_service: AccountsService = Depends(get_accounts_service(AccountsService))
-):
+        username: str, accounts_service: AccountsService = Depends(get_accounts_service(AccountsService))):
     user = await accounts_service.get_user_by_username(username)
 
     if user is None:

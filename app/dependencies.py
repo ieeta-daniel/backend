@@ -37,4 +37,5 @@ def cache():
     return Redis(
         host=settings.redis_server,
         port=settings.redis_port,
+        charset="utf-8",
     )

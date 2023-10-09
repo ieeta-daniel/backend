@@ -37,6 +37,10 @@ class RefreshTokenRequest(BaseModel):
     grant_type: str = 'refresh_token'
 
 
+class LogoutRequest(BaseModel):
+    refresh_token: str
+
+
 @as_form
 class UserCreate(BaseModel):
     username: str
@@ -64,3 +68,4 @@ class UserRead(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+    grant_type: str = 'password'

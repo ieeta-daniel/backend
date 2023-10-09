@@ -17,7 +17,7 @@ async def create_async_database_session() -> AsyncSession:
 
 
 # Define a factory function for creating an AuthService dependency
-def get_auth_service(auth_service_instance):
+def get_accounts_service(accounts_service_instance):
     """
     Create an AuthService dependency that receives an asynchronous database session.
     This allows AuthService to interact with the database within FastAPI route dependencies.
@@ -25,7 +25,7 @@ def get_auth_service(auth_service_instance):
 
     def auth_service_dependency(session: AsyncSession = Depends(create_async_database_session)):
         # Create an instance of AuthService and inject the database session
-        return auth_service_instance(session)
+        return accounts_service_instance(session)
 
     return auth_service_dependency
 

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.v1.accounts.models import User
 from app.v1.accounts.schemas import UserCreate
-from app.v1.accounts.utils import get_hashed_password, decode_access_token, verify_password, decode_refresh_token
+from app.v1.accounts.utils import get_hashed_password, decode_access_token, verify_password
 
 
 class AccountsService:
@@ -35,11 +35,6 @@ class AccountsService:
 
     async def get_current_user(self, token: str) -> User:
         payload = decode_access_token(token)
-        user = await self.get_user(uuid.UUID(payload.sub))
-        return user
-
-    async def get_current_user_by_refresh_token(self, refresh_token: str) -> User:
-        payload = decode_refresh_token(refresh_token)
         user = await self.get_user(uuid.UUID(payload.sub))
         return user
 

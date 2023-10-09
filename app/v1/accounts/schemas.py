@@ -32,6 +32,11 @@ class TokenPayload(BaseModel):
     exp: int = None
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+    grant_type: str = 'refresh_token'
+
+
 @as_form
 class UserCreate(BaseModel):
     username: str

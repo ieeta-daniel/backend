@@ -28,13 +28,17 @@ app.add_middleware(
 
 app.mount("/media", StaticFiles(directory="media"), name="media")
 
-
 app.include_router(v1_router, prefix="/v1", include_in_schema=True)
 
 
 @app.on_event("startup")
 async def startup():
     await create_db_and_tables()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    pass
 
 
 @app.get('/', response_class=RedirectResponse, include_in_schema=False)

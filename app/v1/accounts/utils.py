@@ -1,8 +1,9 @@
 import os
 import secrets
+import string
 from datetime import datetime, timedelta
 from typing import Union, Any
-
+from cryptography.fernet import Fernet
 from fastapi import HTTPException, status
 from jose import jwt
 from passlib.context import CryptContext
@@ -22,29 +23,57 @@ def verify_password(password: str, hashed_pass: str) -> bool:
     return password_context.verify(password, hashed_pass)
 
 
-def create_token(subject: Union[str, Any], expires_delta: int = None, secret_key: str = None) -> str:
+def create_access_token(subject: Union[str, Any], expires_delta: int = None) -> str:
     if expires_delta is not None:
         expires_delta = datetime.utcnow() + timedelta(minutes=expires_delta)
     else:
         expires_delta = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
 
     to_encode = {"exp": expires_delta, "sub": str(subject)}
-    encoded_jwt = jwt.encode(to_encode, secret_key, settings.password_hash_algorithm)
+    encoded_jwt = jwt.encode(to_encode, settings.jwt_secret_key, settings.password_hash_algorithm)
     return encoded_jwt
 
 
-def create_access_token(subject: Union[str, Any], expires_delta: int = None) -> str:
-    return create_token(subject, expires_delta, settings.jwt_secret_key)
+def create_refresh_token():
+    uid_length = 256
+    uid_characters = string.ascii_letters + string.digits
+    refresh_token = ''.join(secrets.choice(uid_characters) for _ in range(uid_length))
+
+    return refresh_token
 
 
-def create_refresh_token(subject: Union[str, Any], expires_delta: int = None) -> str:
-    return create_token(subject, expires_delta, settings.jwt_refresh_secret_key)
+def encrypt_refresh_token(refresh_token):
+    cipher_suite = Fernet(settings.jwt_refresh_secret_key)
+    encrypted_refresh_token = cipher_suite.encrypt(refresh_token.encode())
+    return encrypted_refresh_token
 
 
-def decode_token(token: str, secret_key: str) -> TokenPayload:
+def create_refresh_token_and_encrypt():
+    refresh_token = create_refresh_token()
+    encrypted_refresh_token = encrypt_refresh_token(refresh_token)
+    return encrypted_refresh_token
+
+
+def decrypt_refresh_token(encrypted_refresh_token):
+    cipher_suite = Fernet(settings.jwt_refresh_secret_key)
+    decrypted_refresh_token = cipher_suite.decrypt(encrypted_refresh_token).decode()
+    return decrypted_refresh_token
+
+
+def verify_refresh_token(given_refresh_token, encrypted_refresh_tokens):
+    for encrypted_refresh_token in encrypted_refresh_tokens:
+        decrypted_refresh_token = decrypt_refresh_token(encrypted_refresh_token)
+        if given_refresh_token == decrypted_refresh_token:
+            return encrypted_refresh_token
+    return None
+
+
+
+
+def decode_access_token(token: str) -> TokenPayload:
     try:
         payload = jwt.decode(
-            token, secret_key, algorithms=[settings.password_hash_algorithm]
+            token, settings.jwt_secret_key, algorithms=[settings.password_hash_algorithm]
         )
         token_data = TokenPayload(**payload)
 
@@ -58,17 +87,9 @@ def decode_token(token: str, secret_key: str) -> TokenPayload:
     except(jwt.JWTError, ValidationError):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Could not validate credentials",
+            detail="Could not validate credentials.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-
-def decode_access_token(token: str) -> TokenPayload:
-    return decode_token(token, settings.jwt_secret_key)
-
-
-def decode_refresh_token(token: str) -> TokenPayload:
-    return decode_token(token, settings.jwt_refresh_secret_key)
 
 
 def set_cookies(response, access_token, refresh_token):
@@ -99,6 +120,8 @@ def generate_secret_key(mode='hex', n=32):
         return secrets.token_bytes(n).decode('base32')
     if mode == 'base16':
         return secrets.token_bytes(n).decode('base16')
+    if mode == 'aes':
+        return Fernet.generate_key()
     raise ValueError('mode must be one of hex, urlsafe, ascii, base64, base32, base16')
 
 
@@ -123,4 +146,4 @@ def generate_image_resolutions(file_url: str, sizes=None) -> None:
 
 
 if __name__ == '__main__':
-    print(generate_secret_key('hex', 32))
+    print(generate_secret_key(mode='hex', n=32))

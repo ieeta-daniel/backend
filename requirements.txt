@@ -11,3 +11,5 @@ python-jose[cryptography]~=3.3.0
 python-multipart~=0.0.6
 aiofiles~=23.2.1
 pillow~=10.0.1
+cryptography~=3.4.8
+APScheduler~=3.10.4

@@ -81,6 +81,7 @@ async def register(response: Response, background_tasks: BackgroundTasks, user: 
 async def login(response: Response, redis_client: cache = Depends(cache),
                 form_data: OAuth2PasswordRequestForm = Depends(),
                 accounts_service: AccountsService = Depends(get_accounts_service(AccountsService))):
+
     if form_data.username is None or form_data.password is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username or password not provided")
 
@@ -108,7 +109,7 @@ async def login(response: Response, redis_client: cache = Depends(cache),
 
 
 @router.get('/refresh', response_model=Token, status_code=status.HTTP_200_OK)
-async def refresh(response: Response, request: RefreshTokenRequest = Depends(), redis_client: cache = Depends(cache),
+async def refresh(response: Response, request: RefreshTokenRequest, redis_client: cache = Depends(cache),
                   token: str = Depends(oauth2_scheme),
                   accounts_service: AccountsService = Depends(get_accounts_service(AccountsService))):
     refresh_token = request.refresh_token
@@ -170,7 +171,7 @@ async def refresh(response: Response, request: RefreshTokenRequest = Depends(), 
 
 
 @router.post('/logout', status_code=status.HTTP_200_OK)
-async def logout(response: Response, request: LogoutRequest = Depends(), token: str = Depends(oauth2_scheme),
+async def logout(response: Response, request: LogoutRequest, token: str = Depends(oauth2_scheme),
                  redis_client: cache = Depends(cache),
                  accounts_service: AccountsService = Depends(get_accounts_service(AccountsService))):
     refresh_token = request.refresh_token

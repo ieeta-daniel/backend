@@ -11,8 +11,6 @@ COPY ./requirements.txt /home/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /home/requirements.txt
 
 COPY app /home/app
-COPY docs /home/docs
-COPY tests /home/tests
-COPY media /home/media
+COPY static /home/static
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

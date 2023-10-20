@@ -20,7 +20,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/accounts/login")
 
 scheduler.start()
 
-
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(response: Response, background_tasks: BackgroundTasks, user: UserCreate = Depends(),
                    redis_client: cache = Depends(cache),
@@ -36,7 +35,7 @@ async def register(response: Response, background_tasks: BackgroundTasks, user: 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
     file = user.avatar
-    file_url = ''
+    media_img_url = ''
 
     if file and file.size > 0:
         if file.content_type not in ['image/jpeg', 'image/png', 'image/gif']:
@@ -48,20 +47,23 @@ async def register(response: Response, background_tasks: BackgroundTasks, user: 
                                 detail=f"File size should not exceed {settings.max_avatar_size} bytes")
 
         _, ext = os.path.splitext(file.filename)
-        img_dir = os.path.join(settings.media, 'accounts/avatars')
 
-        os.makedirs(img_dir, exist_ok=True)
+        media_img_dir = os.path.join(settings.media_dir, 'accounts/avatars')
+        static_img_dir = os.path.join(settings.static_dir, media_img_dir)
+
+        os.makedirs(static_img_dir, exist_ok=True)
         content = await file.read()
         file_name = f'{uuid.uuid4().hex}-avatar{ext}'
 
-        file_url = os.path.join(img_dir, file_name)
+        static_img_file = os.path.join(static_img_dir, file_name)
+        media_img_url = os.path.join(media_img_dir, file_name)
 
-        async with aiofiles.open(file_url, mode='wb') as f:
+        async with aiofiles.open(static_img_file, mode='wb') as f:
             await f.write(content)
 
-        background_tasks.add_task(generate_image_resolutions, file_url=file_url, sizes=settings.avatar_sizes)
+        background_tasks.add_task(generate_image_resolutions, file_path=static_img_file, sizes=settings.avatar_sizes)
 
-    user = await accounts_service.create_user(user, file_url)
+    user = await accounts_service.create_user(user, media_img_url)
 
     access_token = create_access_token(user.id)
 

@@ -124,7 +124,7 @@ def generate_secret_key(mode='hex', n=32):
     raise ValueError('mode must be one of hex, urlsafe, ascii, base64, base32, base16')
 
 
-def generate_image_resolutions(file_url: str, sizes=None) -> None:
+def generate_image_resolutions(file_path: str, sizes=None) -> None:
     if sizes is None:
         return
 
@@ -136,10 +136,10 @@ def generate_image_resolutions(file_url: str, sizes=None) -> None:
         else:
             continue
 
-        image = Image.open(file_url, mode='r')
+        image = Image.open(file_path, mode='r')
         image = image.resize((width, height), Image.LANCZOS)
 
-        filename, ext = os.path.splitext(file_url)
+        filename, ext = os.path.splitext(file_path)
 
         image.save(f'{filename}-{width}x{height}{ext}')
 

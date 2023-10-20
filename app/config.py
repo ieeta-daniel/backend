@@ -13,7 +13,12 @@ class GlobalConfig(BaseConfig):
     redoc_url: str = "/redoc"
     api_prefix: str = "/api"
     debug: bool = os.environ.get("DEBUG")
-    media: str = os.environ.get("MEDIA")
+
+    static_dir: str = os.environ.get("STATIC_DIR")
+    media_dir: str = os.environ.get('MEDIA_DIR')
+    media_path: str = os.environ.get("MEDIA_PATH")
+    models_dir: str = os.environ.get('MODELS_DIR')
+    models_path: str = os.environ.get("MODELS_PATH")
     avatar_sizes: list = [50, 150, 300, 600, 800]
     max_avatar_size: int = 1024 * 1024 * 5
 

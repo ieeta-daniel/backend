@@ -26,7 +26,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/media", StaticFiles(directory="media"), name="media")
+app.mount(settings.media_path, StaticFiles(directory=settings.static_dir + settings.media_dir), name="media")
+app.mount(settings.models_path, StaticFiles(directory=settings.static_dir + settings.models_dir), name="models")
 
 app.include_router(v1_router, prefix="/v1", include_in_schema=True)
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, func, ForeignKey
+from sqlalchemy import Column, String, DateTime, func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.database import Base
@@ -18,6 +18,7 @@ class User(Base):
     twitter_username = Column(String)
     homepage_url = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    repositories = relationship("Repository", back_populates="owner")
 
     def __repr__(self):
         return f"id: {self.id}, username: {self.username}"

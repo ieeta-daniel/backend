@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+from typing import List
 
 import aiofiles as aiofiles
 from fastapi import APIRouter, Depends, HTTPException, status, Response, BackgroundTasks
@@ -17,6 +18,7 @@ from app.v1.accounts.utils import set_cookies, create_access_token, create_refre
 router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/accounts/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/accounts/login", auto_error=False)
 
 scheduler.start()
 
@@ -52,14 +54,15 @@ async def register(response: Response, background_tasks: BackgroundTasks, user: 
         static_img_dir = os.path.join(settings.static_dir, media_img_dir)
 
         os.makedirs(static_img_dir, exist_ok=True)
-        content = await file.read()
+
         file_name = f'{uuid.uuid4().hex}-avatar{ext}'
 
         static_img_file = os.path.join(static_img_dir, file_name)
         media_img_url = os.path.join(media_img_dir, file_name)
 
-        async with aiofiles.open(static_img_file, mode='wb') as f:
-            await f.write(content)
+        async with aiofiles.open(static_img_file, mode='wb') as buffer:
+            while content := await file.read(4096):
+                await buffer.write(content)
 
         background_tasks.add_task(generate_image_resolutions, file_path=static_img_file, sizes=settings.avatar_sizes)
 
@@ -221,7 +224,7 @@ async def logout(response: Response, request: LogoutRequest, token: str = Depend
     return {'message': 'Logout successful'}
 
 
-@router.get("/", response_model=list[UserRead])
+@router.get("/", response_model=List[UserRead])
 async def read_users(accounts_service: AccountsService = Depends(get_accounts_service(AccountsService))):
     return await accounts_service.get_all_users()
 

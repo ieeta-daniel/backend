@@ -48,8 +48,11 @@ class UserRead(BaseModel):
     homepage_url: Optional[str] = None
     created_at: datetime.datetime
 
+    class Config:
+        from_attributes = True
+
 
 class UserLogin(BaseModel):
     username: str
     password: str
-    grant_type: str = 'password'
+    grant_type: Optional[str] = 'password'

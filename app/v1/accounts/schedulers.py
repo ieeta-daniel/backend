@@ -20,7 +20,7 @@ def clear_expired_refresh_tokens():
 
 
 def clear_expired_blacklisted_access_tokens():
-    for key in redis_client.scan_iter("blacklisted_access_tokens:*"):
+    for key in redis_client.scan_iter("access_tokens:*"):
         current_timestamp = int(time.time())
 
         redis_client.zremrangebyscore(key, '-inf', current_timestamp)

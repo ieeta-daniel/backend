@@ -38,6 +38,7 @@ class GlobalConfig(BaseConfig):
     password_hash_algorithm: str = os.environ.get("PASSWORD_HASH_ALGORITHM")
     jwt_secret_key: str = os.environ.get("JWT_SECRET_KEY")
     jwt_refresh_secret_key: str = os.environ.get("JWT_REFRESH_SECRET_KEY")
+    jwt_refresh_encryption_secret_key: str = os.environ.get("JWT_REFRESH_ENCRYPTION_SECRET_KEY")
 
     @property
     def sync_database_url(self) -> str:

@@ -12,8 +12,9 @@ class Token(BaseModel):
 
 
 class TokenPayload(BaseModel):
-    sub: str = None
+    sub: uuid.UUID = None
     exp: int = None
+    id: uuid.UUID = None
 
 
 class RefreshTokenRequest(BaseModel):

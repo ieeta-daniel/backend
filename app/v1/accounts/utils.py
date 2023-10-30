@@ -1,8 +1,10 @@
+import json
 import os
 import secrets
 import string
+import uuid
 from datetime import datetime, timedelta
-from typing import Union, Any
+from typing import Union, Any, List
 from cryptography.fernet import Fernet
 from fastapi import HTTPException, status
 from jose import jwt
@@ -10,6 +12,7 @@ from passlib.context import CryptContext
 from pydantic import ValidationError
 from PIL import Image
 from app.config import settings
+from app.v1.accounts.exceptions import InvalidCredentialsException
 from app.v1.accounts.schemas import TokenPayload
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -23,33 +26,35 @@ def verify_password(password: str, hashed_pass: str) -> bool:
     return password_context.verify(password, hashed_pass)
 
 
-def create_access_token(subject: Union[str, Any], expires_delta: int = None) -> str:
+def create_token(secret_key: str, algorithm: str, subject: Union[str, Any], identifier: Union[str, Any], expires_delta: int = None) -> str:
     if expires_delta is not None:
         expires_delta = datetime.utcnow() + timedelta(minutes=expires_delta)
     else:
         expires_delta = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
 
-    to_encode = {"exp": expires_delta, "sub": str(subject)}
-    encoded_jwt = jwt.encode(to_encode, settings.jwt_secret_key, settings.password_hash_algorithm)
+    to_encode = {"exp": expires_delta, "sub": str(subject), "id": str(identifier)}
+
+    encoded_jwt = jwt.encode(to_encode, secret_key, algorithm)
+
     return encoded_jwt
 
 
-def create_refresh_token():
-    uid_length = 256
-    uid_characters = string.ascii_letters + string.digits
-    refresh_token = ''.join(secrets.choice(uid_characters) for _ in range(uid_length))
+def create_access_token(subject: Union[str, Any], identifier: Union[str, Any], expires_delta: int = None) -> str:
+    return create_token(settings.jwt_secret_key, settings.password_hash_algorithm, subject, identifier, expires_delta)
 
-    return refresh_token
+
+def create_refresh_token(subject: Union[str, Any], identifier: Union[str, Any], expires_delta: int = None) -> str:
+    return create_token(settings.jwt_refresh_secret_key, settings.password_hash_algorithm, subject, identifier, expires_delta)
 
 
 def encrypt_refresh_token(refresh_token):
-    cipher_suite = Fernet(settings.jwt_refresh_secret_key)
+    cipher_suite = Fernet(settings.jwt_refresh_encryption_secret_key)
     encrypted_refresh_token = cipher_suite.encrypt(refresh_token.encode('utf-8'))
     return encrypted_refresh_token
 
 
 def decrypt_refresh_token(encrypted_refresh_token):
-    cipher_suite = Fernet(settings.jwt_refresh_secret_key)
+    cipher_suite = Fernet(settings.jwt_refresh_encryption_secret_key)
     decrypted_refresh_token = cipher_suite.decrypt(encrypted_refresh_token).decode('utf-8')
     return decrypted_refresh_token
 
@@ -62,33 +67,41 @@ def verify_refresh_token(given_refresh_token, encrypted_refresh_tokens):
     return None
 
 
-def verify_blacklisted_token(given_access_token, blacklisted_access_tokens):
-    for blacklisted_access_token in blacklisted_access_tokens:
-        if given_access_token == blacklisted_access_token.decode('utf-8'):
+def verify_access_token(given_access_token, access_tokens):
+    for access_token in access_tokens:
+        if given_access_token == access_token.decode('utf-8'):
             return True
     return False
 
 
-def decode_access_token(token: str) -> TokenPayload:
+def decode_token(token: str, secret_key: str, algorithms: List[str]) -> TokenPayload:
     try:
         payload = jwt.decode(
-            token, settings.jwt_secret_key, algorithms=[settings.password_hash_algorithm]
+            token, secret_key, algorithms=algorithms
         )
         token_data = TokenPayload(**payload)
 
         if datetime.fromtimestamp(token_data.exp) < datetime.now():
-            raise HTTPException(
+            raise InvalidCredentialsException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token expired",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         return token_data
     except(jwt.JWTError, ValidationError):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Could not validate credentials.",
+        raise InvalidCredentialsException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def decode_access_token(token: str) -> TokenPayload:
+    return decode_token(token, settings.jwt_secret_key, [settings.password_hash_algorithm])
+
+
+def decode_refresh_token(token: str) -> TokenPayload:
+    return decode_token(token, settings.jwt_refresh_secret_key, [settings.password_hash_algorithm])
 
 
 def set_cookies(response, access_token, refresh_token):

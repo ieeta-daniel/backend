@@ -1,13 +1,15 @@
 import docker
 from kubernetes import client, config
+from kubernetes.client import V1Deployment, V1ObjectMeta, V2HorizontalPodAutoscalerSpec, V2CrossVersionObjectReference
 import tempfile
 import shutil
 import os
+from dotenv import load_dotenv
 
-from kubernetes.client import V1Deployment, V1ObjectMeta, V2HorizontalPodAutoscalerSpec, V2CrossVersionObjectReference
+load_dotenv()
 
 
-def build_docker_image(image_name, handler_path, requirements_path, dockerfile_path):
+def build_docker_image(image_name, handler_path, requirements_path, dockerfile_path, docker_hub_tag=None):
     # Create a temporary directory to stage the code
     staging_dir = tempfile.mkdtemp()
     try:
@@ -15,10 +17,12 @@ def build_docker_image(image_name, handler_path, requirements_path, dockerfile_p
         staged_handler_path = os.path.join(staging_dir, 'handler.py')
         staged_requirements_path = os.path.join(staging_dir, 'requirements.txt')
         staged_dockerfile_path = os.path.join(staging_dir, 'Dockerfile')
+        staged_main_path = os.path.join(staging_dir, 'main.py')
 
         shutil.copy(handler_path, staged_handler_path)
         shutil.copy(requirements_path, staged_requirements_path)
         shutil.copy(dockerfile_path, staged_dockerfile_path)
+        shutil.copy("main.py", staged_main_path)
 
         # Build the Docker image with the code
         docker_client = docker.from_env()
@@ -27,6 +31,15 @@ def build_docker_image(image_name, handler_path, requirements_path, dockerfile_p
             path=staging_dir,
             tag=image_name,
         )
+
+        # Push the Docker image to a registry
+        username = os.environ['DOCKER_USERNAME']
+        password = os.environ['DOCKER_PASSWORD']
+        print(username, password)
+        docker_client.login(username=username, password=password)
+        for line in docker_client.images.push(image_name, stream=True, decode=True):
+            print(line)
+
     finally:
         # Clean up the temporary directory
         shutil.rmtree(staging_dir)
@@ -46,7 +59,7 @@ def create_namespace(namespace):
     core_api_instance.create_namespace(namespace)
 
 
-def create_kubernetes_deployment(namespace, model_name, image_name, min_replicas, max_replicas, container_port=5000):
+def create_kubernetes_deployment(namespace, model_name, image_name, min_replicas, max_replicas, container_port=8000):
     # Load the Kubernetes configuration (e.g., from ~/.kube/config or an in-cluster configuration)
     config.load_kube_config()
 
@@ -61,7 +74,6 @@ def create_kubernetes_deployment(namespace, model_name, image_name, min_replicas
         # we don't want to pull the image from a registry (since we built it locally).
         # This is not recommended for production.
         image_pull_policy="IfNotPresent",
-        restart_policy="OnFailure",
         name=model_name,
         image=image_name,
         resources=client.V1ResourceRequirements(
@@ -122,7 +134,7 @@ def create_kubernetes_deployment(namespace, model_name, image_name, min_replicas
     hpa_api_instance.create_namespaced_horizontal_pod_autoscaler(namespace, body, pretty=True)
 
 
-def create_kubernetes_service(namespace, service_name, deployment_name, target_port, node_port=None):
+def create_kubernetes_service(namespace, service_name, deployment_name, port, target_port, node_port=None):
     # Load the Kubernetes configuration
     config.load_kube_config()
 
@@ -134,9 +146,10 @@ def create_kubernetes_service(namespace, service_name, deployment_name, target_p
 
     # Define the Service spec
     service_spec = client.V1ServiceSpec(
+        type='LoadBalancer',  # Expose the Service on an external IP address
         selector={"app": deployment_name},  # Match labels to select Pods
         ports=[client.V1ServicePort(
-            port=80,  # Port on which the Service listens
+            port=port,  # Port on which the Service listens
             target_port=target_port,  # Port on which your Pods are listening
         )]
     )
@@ -159,20 +172,19 @@ def create_kubernetes_service(namespace, service_name, deployment_name, target_p
 
 def main():
     # Define the model-specific information
-    namespace = "danie"
+    namespace = "models"
     model_name = "model-name"
     service_name = "service-name"
     handler_path = "handler.py"
     requirements_path = "requirements.txt"
     dockerfile_path = "Dockerfile"
-    image_name = "local-image:latest"  # Image name without a registry
+    image_name = "teste"  # Image name without a registry
     min_replicas = 1
     max_replicas = 3
 
     build_docker_image(image_name, handler_path, requirements_path, dockerfile_path)
-    create_namespace(namespace)
-    create_kubernetes_deployment(namespace, model_name, image_name, min_replicas, max_replicas)
-    create_kubernetes_service(namespace, service_name, model_name, 5000)
+    # create_namespace(namespace)
+    # create_kubernetes_deployment(namespace, model_name, image_name, min_replicas, max_replicas)
 
 
 if __name__ == "__main__":

@@ -24,20 +24,25 @@ def build_docker_image(image_name, handler_path, requirements_path, dockerfile_p
         shutil.copy(dockerfile_path, staged_dockerfile_path)
         shutil.copy("main.py", staged_main_path)
 
+        username = os.environ['DOCKER_USERNAME']
+        password = os.environ['DOCKER_PASSWORD']
+
+        tag = f"{username}/{image_name}"
+
         # Build the Docker image with the code
         docker_client = docker.from_env()
         docker_client.images.build(
             dockerfile=staged_dockerfile_path,
             path=staging_dir,
-            tag=image_name,
+            tag=tag,
         )
 
         # Push the Docker image to a registry
-        username = os.environ['DOCKER_USERNAME']
-        password = os.environ['DOCKER_PASSWORD']
+
         print(username, password)
         docker_client.login(username=username, password=password)
-        for line in docker_client.images.push(image_name, stream=True, decode=True):
+        print(image_name)
+        for line in docker_client.images.push(tag, stream=True, decode=True):
             print(line)
 
     finally:
@@ -178,7 +183,7 @@ def main():
     handler_path = "handler.py"
     requirements_path = "requirements.txt"
     dockerfile_path = "Dockerfile"
-    image_name = "teste"  # Image name without a registry
+    image_name = "teste2"  # Image name without a registry
     min_replicas = 1
     max_replicas = 3
 

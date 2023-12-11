@@ -42,6 +42,18 @@ def get_repositories_service(repositories_service_instance):
 
     return repositories_service_dependency
 
+def get_models_service(models_service_instance):
+    """
+    Create an AuthService dependency that receives an asynchronous database session.
+    This allows AuthService to interact with the database within FastAPI route dependencies.
+    """
+
+    def models_service_dependency(session: AsyncSession = Depends(create_async_database_session)):
+        # Create an instance of AuthService and inject the database session
+        return models_service_instance(session)
+
+    return models_service_dependency
+
 
 def cache():
     """

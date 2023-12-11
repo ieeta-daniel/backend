@@ -14,15 +14,15 @@ def build_docker_image(image_name, handler_path, requirements_path, dockerfile_p
     staging_dir = tempfile.mkdtemp()
     try:
         # Copy the handler.py and any other dependencies to the staging directory
-        staged_handler_path = os.path.join(staging_dir, 'handler.py')
+        staged_handler_path = os.path.join(staging_dir, 'handler_files/handler.py')
         staged_requirements_path = os.path.join(staging_dir, 'requirements.txt')
-        staged_dockerfile_path = os.path.join(staging_dir, 'Dockerfile')
-        staged_main_path = os.path.join(staging_dir, 'main.py')
+        staged_dockerfile_path = os.path.join(staging_dir, 'handler_files/Dockerfile')
+        staged_main_path = os.path.join(staging_dir, 'handler_files/main.py')
 
         shutil.copy(handler_path, staged_handler_path)
         shutil.copy(requirements_path, staged_requirements_path)
         shutil.copy(dockerfile_path, staged_dockerfile_path)
-        shutil.copy("main.py", staged_main_path)
+        shutil.copy("handler_files/main.py", staged_main_path)
 
         username = os.environ['DOCKER_USERNAME']
         password = os.environ['DOCKER_PASSWORD']
@@ -180,9 +180,9 @@ def main():
     namespace = "models"
     model_name = "model-name"
     service_name = "service-name"
-    handler_path = "handler.py"
+    handler_path = "handler_files/handler.py"
     requirements_path = "requirements.txt"
-    dockerfile_path = "Dockerfile"
+    dockerfile_path = "handler_files/Dockerfile"
     image_name = "teste2"  # Image name without a registry
     min_replicas = 1
     max_replicas = 3

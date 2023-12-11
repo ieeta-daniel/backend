@@ -18,6 +18,7 @@ class User(Base):
     twitter_username = Column(String)
     homepage_url = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    models = relationship("Model", back_populates="owner", cascade="all, delete-orphan")
     repositories = relationship("Repository", back_populates="owner", cascade="all, delete-orphan")
 
     def __repr__(self):

@@ -1,0 +1,13 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - $(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
+  build:
+    commands:
+      - docker build -t <your-repo-name> .
+      - docker tag <your-repo-name>:latest <your-ecr-uri>/<your-repo-name>:latest
+  post_build:
+    commands:
+      - docker push <your-ecr-uri>/<your-repo-name>:latest

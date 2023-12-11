@@ -14,13 +14,18 @@ from app.v1.accounts.schemas import UserRead
 class ModelCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    type: str
+    endpoint: Optional[str] = None
     private: bool = False
+    readme: Optional[bool] = False
 
 
 class ModelRead(BaseModel):
     id: uuid.UUID
     name: str
     description: Optional[str] = None
+    endpoint: Optional[str] = None
+    type: str
     private: bool
     created_at: datetime.datetime
     path: str
@@ -34,6 +39,8 @@ class ModelReadWithUser(BaseModel):
     private: bool
     created_at: datetime.datetime
     path: str
+    endpoint: Optional[str] = None
+    type: str
     owner: UserRead
 
     class Config:

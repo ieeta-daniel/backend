@@ -50,7 +50,16 @@ async def create_model(
 
     os.makedirs(static_model_model_dir, exist_ok=True)
 
-    model = await models_service.create_model(model, owner=user, path=model_model_dir)
+    include_readme = model.readme
+
+    if include_readme:
+        readme_path = os.path.join(static_model_model_dir, "README.md")
+        async with aiofiles.open(readme_path, "w") as buffer:
+            await buffer.write("# " + model.name + "\n\n" + model.description)
+
+    modifiable_model = ModelCreate(**model.model_dump(exclude={"readme"}))
+
+    model = await models_service.create_model(modifiable_model, owner=user, path=model_model_dir)
 
     return model
 

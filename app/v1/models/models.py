@@ -14,5 +14,8 @@ class Model(Base):
     private = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     path = Column(String, unique=True)
+    endpoint = Column(String, nullable=True)
+    type = Column(String, nullable=False)
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     owner = relationship("User", back_populates="models")
+
